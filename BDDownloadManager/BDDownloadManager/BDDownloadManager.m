@@ -70,6 +70,10 @@
 
 @implementation BDDownloadManager
 
+- (void)dealloc {
+    self.isBackgroundDownload = NO;
+}
+
 #pragma mark - 初始化
 + (BDDownloadManager *)manager {
     static id sharedInstance = nil;
@@ -111,7 +115,7 @@
 
 - (void)setIsBackgroundDownload:(BOOL)isBackgroundDownload {
     if (isBackgroundDownload) {
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(backgroundDownload:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(backgroundDownload) name:UIApplicationDidEnterBackgroundNotification object:nil];
     } else {
         [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
     }
@@ -532,7 +536,7 @@
 }
 
 #pragma mark - 后台下载
-- (void)backgroundDownload:(NSNotification *)sender {
+- (void)backgroundDownload {
     // 后台任务存在
     if (_taskIdentifier != UIBackgroundTaskInvalid) {
         return;
