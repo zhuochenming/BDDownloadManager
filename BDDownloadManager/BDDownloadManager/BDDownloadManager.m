@@ -279,7 +279,7 @@
         model.manualCancle = YES;
     }
     [model.task suspend];
-    model.state = BDDownloadStateSuspended;
+    [self model:model didChangedState:BDDownloadStateSuspended filePath:model.filePath error:nil];
 }
 
 // 取消下载
@@ -307,68 +307,6 @@
 - (void)cancleAllDownload {
     [self cancleModels:_downloadingModels];
     [self cancleModels:_waitingDownloadModels];
-}
-
-#pragma mark - private
-//自动下载下一个等待队列任务
-- (void)willResumeNextWithDowloadModel:(BDDownloadModel *)model {
-    if (_isBatchDownload) {
-        return;
-    }
-    
-    @synchronized (self) {
-        [self.downloadingModels removeObject:model];
-        // 还有未下载的
-        if (self.waitingDownloadModels.count > 0) {
-            BDDownloadModel *nextModel = _resumeDownloadFIFO ? self.waitingDownloadModels.firstObject : self.waitingDownloadModels.lastObject;
-            [self resumeModel:nextModel];
-        }
-    }
-}
-
-// 是否开启下载等待队列任务
-- (BOOL)canResumeDownlaodModel:(BDDownloadModel *)model {
-    if (_isBatchDownload) {
-        return YES;
-    }
-    
-    @synchronized (self) {
-        if (self.downloadingModels.count >= _maxDownloadCount) {
-            if ([self.waitingDownloadModels indexOfObject:model] == NSNotFound) {
-                [self.waitingDownloadModels addObject:model];
-                self.downloadingModelDic[model.downloadURL] = model;
-            }
-            model.state = BDDownloadStateReadying;
-            [self model:model didChangedState:BDDownloadStateReadying filePath:nil error:nil];
-            return NO;
-        }
-        
-        if ([self.waitingDownloadModels indexOfObject:model] != NSNotFound) {
-            [self.waitingDownloadModels removeObject:model];
-        }
-        
-        if ([self.downloadingModels indexOfObject:model] == NSNotFound) {
-            [self.downloadingModels addObject:model];
-        }
-        return YES;
-    }
-}
-
-- (void)model:(BDDownloadModel *)model didChangedState:(BDDownloadState)state filePath:(NSString *)filePath error:(NSError *)error {
-    model.state = state;
-    if (model.stateBlock) {
-        model.stateBlock(state, filePath, error);
-    }
-}
-
-- (void)downloadModel:(BDDownloadModel *)downloadModel progress:(BDDownloadProgress *)progress {
-    if (downloadModel.progressBlock) {
-        downloadModel.progressBlock(downloadModel.bindingData, progress);
-    }
-}
-
-- (void)removeDownLoadingModelForURLString:(NSString *)URLString {
-    [self.downloadingModelDic removeObjectForKey:URLString];
 }
 
 #pragma mark - NSURLSessionDelegate代理回调
@@ -400,9 +338,7 @@
     completionHandler(NSURLSessionResponseAllow);
 }
 
-/**
- * 接收到服务器返回的数据
- */
+// 接收到服务器返回的数据
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
     BDDownloadModel *model = [self downLoadingModelForURLString:dataTask.taskDescription];
     if (!model || model.state == BDDownloadStateSuspended) {
@@ -422,17 +358,15 @@
     
     int64_t remainingContentLength = model.progress.totalBytesExpectedToWrite - model.progress.totalBytesWritten;
     model.progress.remainingTime = ceilf(remainingContentLength / model.progress.speed);
-    NSNotification *notification =[NSNotification notificationWithName:BDDownloadProgressNofification object:model];
-    [[NSNotificationCenter defaultCenter] postNotification:notification];
+    
+    [[NSNotificationCenter defaultCenter] postNotificationName:BDDownloadProgressNofification object:model];
     
     dispatch_async(dispatch_get_main_queue(), ^(){
         [self downloadModel:model progress:model.progress];
     });
 }
 
-/**
- * 请求完毕（成功|失败）
- */
+// 请求完毕（成功|失败）
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
     BDDownloadModel *model = [self downLoadingModelForURLString:task.taskDescription];
     
@@ -450,38 +384,34 @@
         // 暂停下载
         dispatch_async(dispatch_get_main_queue(), ^(){
             model.manualCancle = NO;
-//            model.state = BDDownloadStateSuspended;
             [self model:model didChangedState:BDDownloadStateSuspended filePath:nil error:nil];
             [self willResumeNextWithDowloadModel:model];
         });
     } else if (error) {
         // 下载失败
         dispatch_async(dispatch_get_main_queue(), ^(){
-//            model.state = BDDownloadStateFailed;
             [self model:model didChangedState:BDDownloadStateFailed filePath:nil error:error];
             [self willResumeNextWithDowloadModel:model];
         });
     } else if ([self isDownloadCompletedWithModel:model]) {
         // 下载完成
-        dispatch_async(dispatch_get_main_queue(), ^(){
-//            model.state = BDDownloadStateCompleted;
-            [[NSNotificationCenter defaultCenter] postNotificationName:BDDownloadCompletedNofification object:model];
-            [self model:model didChangedState:BDDownloadStateCompleted filePath:model.filePath error:nil];
-            [self willResumeNextWithDowloadModel:model];
-        });
+        [self downloadCompleted:model];
     } else {
         // 下载完成
-        dispatch_async(dispatch_get_main_queue(), ^(){
-//            model.state = BDDownloadStateCompleted;
-            [[NSNotificationCenter defaultCenter] postNotificationName:BDDownloadCompletedNofification object:model];
-            [self model:model didChangedState:BDDownloadStateCompleted filePath:model.filePath error:nil];
-            [self willResumeNextWithDowloadModel:model];
-        });
+        [self downloadCompleted:model];
     }
 }
 
+- (void)downloadCompleted:(BDDownloadModel *)model {
+    dispatch_async(dispatch_get_main_queue(), ^(){
+        [[NSNotificationCenter defaultCenter] postNotificationName:BDDownloadCompletedNofification object:model];
+        [self model:model didChangedState:BDDownloadStateCompleted filePath:model.filePath error:nil];
+        [self willResumeNextWithDowloadModel:model];
+    });
+}
+
 #pragma mark - 文件管理
-//  创建缓存目录文件
+// 创建缓存目录文件
 - (void)createDirectory:(NSString *)directory {
     if (![self.fileManager fileExistsAtPath:directory]) {
         [self.fileManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:NULL];
@@ -588,5 +518,67 @@
         [self.fileManager removeItemAtPath:downloadDic error:nil];
     }
 }
+
+#pragma mark - private
+//自动下载下一个等待队列任务
+- (void)willResumeNextWithDowloadModel:(BDDownloadModel *)model {
+    if (_isBatchDownload) {
+        return;
+    }
+    
+    @synchronized (self) {
+        [self.downloadingModels removeObject:model];
+        // 还有未下载的
+        if (self.waitingDownloadModels.count > 0) {
+            BDDownloadModel *nextModel = _resumeDownloadFIFO ? self.waitingDownloadModels.firstObject : self.waitingDownloadModels.lastObject;
+            [self resumeModel:nextModel];
+        }
+    }
+}
+
+// 是否开启下载等待队列任务
+- (BOOL)canResumeDownlaodModel:(BDDownloadModel *)model {
+    if (_isBatchDownload) {
+        return YES;
+    }
+    
+    @synchronized (self) {
+        if (self.downloadingModels.count >= _maxDownloadCount) {
+            if ([self.waitingDownloadModels indexOfObject:model] == NSNotFound) {
+                [self.waitingDownloadModels addObject:model];
+                self.downloadingModelDic[model.downloadURL] = model;
+            }
+            [self model:model didChangedState:BDDownloadStateReadying filePath:nil error:nil];
+            return NO;
+        }
+        
+        if ([self.waitingDownloadModels indexOfObject:model] != NSNotFound) {
+            [self.waitingDownloadModels removeObject:model];
+        }
+        
+        if ([self.downloadingModels indexOfObject:model] == NSNotFound) {
+            [self.downloadingModels addObject:model];
+        }
+        return YES;
+    }
+}
+
+- (void)model:(BDDownloadModel *)model didChangedState:(BDDownloadState)state filePath:(NSString *)filePath error:(NSError *)error {
+    model.state = state;
+    if (model.stateBlock) {
+        model.stateBlock(state, filePath, error);
+    }
+}
+
+- (void)downloadModel:(BDDownloadModel *)downloadModel progress:(BDDownloadProgress *)progress {
+    if (downloadModel.progressBlock) {
+        downloadModel.progressBlock(downloadModel.bindingData, progress);
+    }
+}
+
+- (void)removeDownLoadingModelForURLString:(NSString *)URLString {
+    [self.downloadingModelDic removeObjectForKey:URLString];
+}
+
 
 @end
