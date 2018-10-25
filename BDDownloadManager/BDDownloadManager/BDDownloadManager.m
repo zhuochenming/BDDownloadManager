@@ -62,7 +62,9 @@
 // 等待中的模型
 @property (nonatomic, strong) NSMutableArray *downloadingModels;
 // 回调代理的队列
-@property (strong, nonatomic) NSOperationQueue *queue;
+@property (nonatomic, strong) NSOperationQueue *queue;
+// 后台任务标识
+@property (nonatomic, assign) UIBackgroundTaskIdentifier taskIdentifier;
 
 @end
 
@@ -86,6 +88,8 @@
 
         //下载线程
         self.maxDownloadCount = 1;
+        self.isBackgroundDownload = YES;
+        
         self.queue = [[NSOperationQueue alloc] init];
         self.queue.maxConcurrentOperationCount = _maxDownloadCount;
         self.session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration] delegate:self delegateQueue:_queue];
@@ -103,6 +107,14 @@
 - (void)setMaxDownloadCount:(NSInteger)maxDownloadCount {
     _maxDownloadCount = maxDownloadCount;
     self.queue.maxConcurrentOperationCount = maxDownloadCount;
+}
+
+- (void)setIsBackgroundDownload:(BOOL)isBackgroundDownload {
+    if (isBackgroundDownload) {
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(backgroundDownload:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+    } else {
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidEnterBackgroundNotification object:nil];
+    }
 }
 
 #pragma mark - 下载状态以及model
@@ -517,6 +529,24 @@
         // 删除沙盒中所有资源
         [self.fileManager removeItemAtPath:downloadDic error:nil];
     }
+}
+
+#pragma mark - 后台下载
+- (void)backgroundDownload:(NSNotification *)sender {
+    // 后台任务存在
+    if (_taskIdentifier != UIBackgroundTaskInvalid) {
+        return;
+    }
+    UIApplication *application = [UIApplication sharedApplication];
+    self.taskIdentifier = [application beginBackgroundTaskWithExpirationHandler:^{
+        // stop backgroundTask
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.taskIdentifier != UIBackgroundTaskInvalid) {
+                [application endBackgroundTask:self.taskIdentifier];
+                self.taskIdentifier = UIBackgroundTaskInvalid;
+            }
+        });
+    }];
 }
 
 #pragma mark - private

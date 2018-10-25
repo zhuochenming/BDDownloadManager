@@ -20,6 +20,9 @@
 // 最大下载数
 @property (nonatomic, assign) NSInteger maxDownloadCount;
 
+// 是否支持后台下载 默认YES
+@property (nonatomic, assign) BOOL isBackgroundDownload;
+
 // 等待下载队列 先进先出 默认YES， 当NO时，先进后出
 @property (nonatomic, assign) BOOL resumeDownloadFIFO;
 
