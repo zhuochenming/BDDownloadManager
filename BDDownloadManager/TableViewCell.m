@@ -38,13 +38,9 @@
 
 - (void)updateStyle:(NSNotification *)sender {
     BDDownloadModel *model = sender.object;
-    
-    NSLog(@"下载URL：%@， 下载进度：%f", _url, model.progress.progress);
     if ([model.downloadURL isEqualToString:_url]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self updateDownloadState:model.state];
-            [self updateProgress:model.progress.progress];
-        });
+        [self updateDownloadState:model.state];
+        [self updateProgress:model.progress.progress];
     }
 }
 

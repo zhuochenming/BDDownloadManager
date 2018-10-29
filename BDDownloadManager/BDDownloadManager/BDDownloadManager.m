@@ -374,10 +374,9 @@
     
     int64_t remainingContentLength = model.progress.totalBytesExpectedToWrite - model.progress.totalBytesWritten;
     model.progress.remainingTime = ceilf(remainingContentLength / model.progress.speed);
-    
-    [[NSNotificationCenter defaultCenter] postNotificationName:BDDownloadProgressNofification object:model];
-    
+
     dispatch_async(dispatch_get_main_queue(), ^(){
+        [[NSNotificationCenter defaultCenter] postNotificationName:BDDownloadProgressNofification object:model];
         [self downloadModel:model progress:model.progress];
     });
 }

@@ -60,7 +60,7 @@
 
 /** 取消下载 */
 - (void)cancleModel:(BDDownloadModel *)model;
-- (void)cancleModels:(NSArray *)models;
+- (void)cancleModels:(NSArray <BDDownloadModel *>*)models;
 - (void)cancleAllDownload;
 
 /** 删除下载的文件 */
