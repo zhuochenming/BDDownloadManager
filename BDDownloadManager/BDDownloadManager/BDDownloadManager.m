@@ -141,6 +141,10 @@
     return model;
 }
 
+- (BDDownloadModel *)modelWithURLString:(NSString *)URLString {
+    return [self modelWithURLString:URLString toDestinationPath:nil];
+}
+
 #pragma mark - 下载相关
 - (void)startModel:(BDDownloadModel *)model progress:(BDDownloadProgressBlock)progress state:(BDDownloadStateBlock)state {
     model.progressBlock = progress;
@@ -383,6 +387,15 @@
 - (long long)fileSizeInCachePlistWithDownloadModel:(BDDownloadModel *)model {
     NSDictionary *downloadsFileSizePlist = [NSDictionary dictionaryWithContentsOfFile:[self fileSizePathWithDownloadModel:model]];
     return [downloadsFileSizePlist[model.downloadURL] longLongValue];
+}
+
+- (NSString *)defalutFilePathWithURLString:(NSString *)URLString {
+    if (URLString.length == 0) {
+        return nil;
+    }
+    NSString *fileName = URLString.lastPathComponent;
+    NSString *downloadDirectory = [[NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) lastObject] stringByAppendingPathComponent:kDefaultCacheDirectory];
+    return [downloadDirectory stringByAppendingPathComponent:fileName];
 }
 
 //删除文件

@@ -44,7 +44,8 @@
  @return 模型
  */
 - (BDDownloadModel *)modelWithURLString:(NSString *)URLString toDestinationPath:(NSString *)destinationPath;
-
+/** 同上，文件会下载在默认的文件路径 */
+- (BDDownloadModel *)modelWithURLString:(NSString *)URLString;
 
 
 /**
@@ -86,6 +87,13 @@
 
 
 
+/**
+ 生成model时没有使用destinationPath参数或者为nil，获取默认的文件下载路径
+
+ @param URLString 下载链接
+ @return 默认的文件下载路径
+ */
+- (NSString *)defalutFilePathWithURLString:(NSString *)URLString;
 /** 删除下载的文件 */
 - (void)deleteFileWithURLString:(NSString *)URLString filePath:(NSString *)filePath;
 - (void)deleteFileWithModel:(BDDownloadModel *)model;
