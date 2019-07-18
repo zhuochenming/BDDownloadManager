@@ -36,13 +36,19 @@
 
 
 
-/** 获取下载模型 */
+/**
+ 框架的开始下载、暂停、继续下载、取消下载都基于由此获得的下载模型，即使使用过程中程序被杀死，依旧可以通过此方法获取某个下载URL的进度等信息
+
+ @param URLString 下载URL
+ @param destinationPath 下载文件路径
+ @return 模型
+ */
 - (BDDownloadModel *)modelWithURLString:(NSString *)URLString toDestinationPath:(NSString *)destinationPath;
 
 
 
 /**
- 开始下载 保存在默认文件路径里(复用机制请用通知，在cell里面处理进度等UI刷新)
+ 开始下载 保存在默认文件路径 里(复用机制请用通知，在cell里面处理进度等UI刷新)
 
  @param model 下载model
  @param progress 进度model
@@ -63,14 +69,9 @@
 - (void)cancleModels:(NSArray <BDDownloadModel *>*)models;
 - (void)cancleAllDownload;
 
-/** 删除下载的文件 */
-- (void)deleteFileWithURL:(NSString *)url filePath:(NSString *)filePath;
-- (void)deleteFileWithModel:(BDDownloadModel *)model;
-- (void)deleteAllFileInDirectory:(NSString *)downloadDic;
 
 
-
-/** 当前的URL下载状态，可能为nil */
+/** 当前的URL下载状态 */
 - (BDDownloadState)stateWithModel:(BDDownloadModel *)model;
 /** 获取正在下载模型 */
 - (BDDownloadModel *)downLoadingModelForURLString:(NSString *)URLString;
@@ -82,5 +83,12 @@
 - (BOOL)isQueueURL:(NSString *)url;
 /** 是否已经下载 */
 - (BOOL)isDownloadCompletedWithModel:(BDDownloadModel *)model;
+
+
+
+/** 删除下载的文件 */
+- (void)deleteFileWithURLString:(NSString *)URLString filePath:(NSString *)filePath;
+- (void)deleteFileWithModel:(BDDownloadModel *)model;
+- (void)deleteAllFileInDirectory:(NSString *)downloadDic;
 
 @end

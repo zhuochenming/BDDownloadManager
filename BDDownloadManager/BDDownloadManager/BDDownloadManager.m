@@ -93,6 +93,8 @@
         //下载线程
         self.maxDownloadCount = 1;
         self.isBackgroundDownload = YES;
+        self.resumeDownloadFIFO = YES;
+        self.isBatchDownload = NO;
         
         self.queue = [[NSOperationQueue alloc] init];
         self.queue.maxConcurrentOperationCount = _maxDownloadCount;
@@ -101,9 +103,6 @@
         self.downloadingModelDic = [NSMutableDictionary dictionary];
         self.downloadingModels = [NSMutableArray array];
         self.waitingDownloadModels = [NSMutableArray array];
-        
-        self.resumeDownloadFIFO = YES;
-        self.isBatchDownload = NO;
     }
     return self;
 }
@@ -121,8 +120,7 @@
     }
 }
 
-#pragma mark - 下载状态以及model
-// 获取下载模型
+#pragma mark - 下载模型
 - (BDDownloadModel *)modelWithURLString:(NSString *)URLString toDestinationPath:(NSString *)destinationPath {
     
     //如果不是URL链接 返回nil
@@ -141,82 +139,6 @@
         [self createDirectory:model.downloadDirectory];
     }
     return model;
-}
-
-- (BDDownloadModel *)downLoadingModelForURLString:(NSString *)URLString {
-    return [self.downloadingModelDic objectForKey:URLString];
-}
-
-- (BDDownloadState)stateWithModel:(BDDownloadModel *)model {
-    if (![BDDownloadUtility isURLString:model.downloadURL]) {
-        return BDDownloadStateFailed;
-    }
-    
-    NSString *url = model.downloadURL;
-    BDDownloadModel *downloadModel = self.downloadingModelDic[url];
-    if (downloadModel) {
-        return downloadModel.state;
-    }
-    
-    BDDownloadManager *manager = [BDDownloadManager manager];
-    BDDownloadProgress *progress = model.progress;
-    if (progress.totalBytesWritten == 0) {
-        if ([manager isQueueURL:url]) {
-            return BDDownloadStateReadying;
-        } else {
-            return BDDownloadStateNone;
-        }
-    } else if (progress.totalBytesWritten == progress.totalBytesExpectedToWrite) {
-        return BDDownloadStateCompleted;
-    } else {
-        if ([manager isDownloadingURL:url]) {
-            return BDDownloadStateRunning;
-        } else if ([manager isWaitingDownloadURL:url]) {
-            return BDDownloadStateReadying;
-        } else {
-            return BDDownloadStateSuspended;
-        }
-    }
-}
-
-- (BOOL)isDownloadingURL:(NSString *)url {
-    if (url.length == 0) {
-        return NO;
-    }
-    for (NSInteger i = 0; i < _downloadingModels.count; i++) {
-        BDDownloadModel *model = _downloadingModels[i];
-        if ([model.downloadURL isEqualToString:url]) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-- (BOOL)isWaitingDownloadURL:(NSString *)url {
-    if (url.length == 0) {
-        return NO;
-    }
-    
-    for (NSInteger i = 0; i < _waitingDownloadModels.count; i++) {
-        BDDownloadModel *model = _waitingDownloadModels[i];
-        if ([model.downloadURL isEqualToString:url]) {
-            return YES;
-        }
-    }
-    return NO;
-}
-
-- (BOOL)isQueueURL:(NSString *)url {
-    return [self isDownloadingURL:url] | [self isWaitingDownloadURL:url];
-}
-
-// 是否已经下载
-- (BOOL)isDownloadCompletedWithModel:(BDDownloadModel *)downloadModel {
-    long long fileSize = [self fileSizeInCachePlistWithDownloadModel:downloadModel];
-    if (fileSize > 0 && fileSize == [self fileSizeWithDownloadModel:downloadModel]) {
-        return YES;
-    }
-    return NO;
 }
 
 #pragma mark - 下载相关
@@ -321,8 +243,9 @@
     }
 }
 - (void)cancleAllDownload {
-    [self cancleModels:_downloadingModels];
-    [self cancleModels:_waitingDownloadModels];
+    NSMutableArray *array = [NSMutableArray arrayWithArray:_downloadingModels];
+    [array addObjectsFromArray:_waitingDownloadModels];
+    [self cancleModels:array];
 }
 
 #pragma mark - NSURLSessionDelegate代理回调
@@ -463,10 +386,10 @@
 }
 
 //删除文件
-- (void)deleteFileWithURL:(NSString *)url filePath:(NSString *)filePath {
-    BDDownloadModel *model = [_downloadingModelDic objectForKey:url];
+- (void)deleteFileWithURLString:(NSString *)URLString filePath:(NSString *)filePath {
+    BDDownloadModel *model = [_downloadingModelDic objectForKey:URLString];
     if (!model) {
-        model = [[BDDownloadModel alloc] initWithURLString:url filePath:filePath];
+        model = [[BDDownloadModel alloc] initWithURLString:URLString filePath:filePath];
     }
     [self deleteFileWithModel:model];
 }
@@ -613,5 +536,81 @@
     [self.downloadingModelDic removeObjectForKey:URLString];
 }
 
+#pragma mark - other
+- (BDDownloadModel *)downLoadingModelForURLString:(NSString *)URLString {
+    return [self.downloadingModelDic objectForKey:URLString];
+}
+
+- (BDDownloadState)stateWithModel:(BDDownloadModel *)model {
+    if (![BDDownloadUtility isURLString:model.downloadURL]) {
+        return BDDownloadStateFailed;
+    }
+    
+    NSString *url = model.downloadURL;
+    BDDownloadModel *downloadModel = self.downloadingModelDic[url];
+    if (downloadModel) {
+        return downloadModel.state;
+    }
+    
+    BDDownloadManager *manager = [BDDownloadManager manager];
+    BDDownloadProgress *progress = model.progress;
+    if (progress.totalBytesWritten == 0) {
+        if ([manager isQueueURL:url]) {
+            return BDDownloadStateReadying;
+        } else {
+            return BDDownloadStateNone;
+        }
+    } else if (progress.totalBytesWritten == progress.totalBytesExpectedToWrite) {
+        return BDDownloadStateCompleted;
+    } else {
+        if ([manager isDownloadingURL:url]) {
+            return BDDownloadStateRunning;
+        } else if ([manager isWaitingDownloadURL:url]) {
+            return BDDownloadStateReadying;
+        } else {
+            return BDDownloadStateSuspended;
+        }
+    }
+}
+
+- (BOOL)isDownloadingURL:(NSString *)url {
+    if (url.length == 0) {
+        return NO;
+    }
+    for (NSInteger i = 0; i < _downloadingModels.count; i++) {
+        BDDownloadModel *model = _downloadingModels[i];
+        if ([model.downloadURL isEqualToString:url]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (BOOL)isWaitingDownloadURL:(NSString *)url {
+    if (url.length == 0) {
+        return NO;
+    }
+    
+    for (NSInteger i = 0; i < _waitingDownloadModels.count; i++) {
+        BDDownloadModel *model = _waitingDownloadModels[i];
+        if ([model.downloadURL isEqualToString:url]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (BOOL)isQueueURL:(NSString *)url {
+    return [self isDownloadingURL:url] | [self isWaitingDownloadURL:url];
+}
+
+// 是否已经下载
+- (BOOL)isDownloadCompletedWithModel:(BDDownloadModel *)downloadModel {
+    long long fileSize = [self fileSizeInCachePlistWithDownloadModel:downloadModel];
+    if (fileSize > 0 && fileSize == [self fileSizeWithDownloadModel:downloadModel]) {
+        return YES;
+    }
+    return NO;
+}
 
 @end

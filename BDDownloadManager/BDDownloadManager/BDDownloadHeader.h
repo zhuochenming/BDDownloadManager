@@ -16,7 +16,6 @@ static NSString *kPlistName = @"DownloadsLength.plist";
 static NSString *BDDownloadProgressNofification = @"BDDownloadProgressNofification";
 //下载完成的通知
 static NSString *BDDownloadCompletedNofification = @"BDDownloadCompletedNofification";
-
 // 下载状态
 typedef NS_ENUM(NSUInteger, BDDownloadState) {
     BDDownloadStateNone,        // 未下载 或 下载删除了
@@ -26,7 +25,5 @@ typedef NS_ENUM(NSUInteger, BDDownloadState) {
     BDDownloadStateCompleted,   // 下载完成
     BDDownloadStateFailed       // 下载失败
 };
-
-
 
 #endif /* BDDownloadHeader_h */
